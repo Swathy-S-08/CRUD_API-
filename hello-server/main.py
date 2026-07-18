@@ -14,6 +14,10 @@ tasks = [
 class TaskCreate(BaseModel):
     title: Optional[str] = None
 
+class TaskUpdate(BaseModel):
+    title: Optional[str]=None
+    done: Optional[bool]=None
+
 @app.get("/")
 def read_root():
     return {
@@ -56,4 +60,37 @@ def create_task(task: TaskCreate):
     return JSONResponse(
         status_code=201,
         content=new_task
+    )
+
+@app.put("/tasks/{task_id}")
+def update_task(task_id: int, update: TaskUpdate):
+    if update.title is not None and not update.title.strip():
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Title cannot be empty"}
+        )
+
+    for task in tasks:
+        if task["id"] == task_id:
+            if update.title is not None:
+                task["title"] = update.title
+            if update.done is not None:
+                task["done"] = update.done
+            return task
+
+    return JSONResponse(
+        status_code=404,
+        content={"error": f"Task {task_id} not found"}
+    )
+
+@app.delete("/tasks/{task_id}")
+def delete_task(task_id: int):
+    for i, task in enumerate(tasks):
+        if task["id"] == task_id:
+            tasks.pop(i)
+            return Response(status_code=204)
+
+    return JSONResponse(
+        status_code=404,
+        content={"error": f"Task {task_id} not found"}
     )
