@@ -1,9 +1,14 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional
 
-app = FastAPI()
+
+app = FastAPI(
+    title="Task API",
+    description="A simple CRUD API for managing tasks.",
+    version="1.0"
+)
 
 tasks = [
     {"id": 1, "title": "Learn FastAPI", "done": False},
@@ -20,6 +25,7 @@ class TaskUpdate(BaseModel):
 
 @app.get("/")
 def read_root():
+    """Returns basic info about this API."""
     return {
         "name": "Task API",
         "version": "1.0",
@@ -28,14 +34,17 @@ def read_root():
 
 @app.get("/health")
 def health_check():
+    """Health check endpoint — confirms the server is running."""
     return {"status": "ok"}
 
 @app.get("/tasks")
 def get_tasks():
+    """Returns the full list of tasks."""
     return tasks
 
 @app.get("/tasks/{task_id}")
 def get_task(task_id:int):
+    """Returns a single task by id. 404 if it doesn't exist."""
     for task in tasks:
         if task["id"]==task_id:
             return task
@@ -47,6 +56,7 @@ def get_task(task_id:int):
 
 @app.post("/tasks")
 def create_task(task: TaskCreate):
+    """Creates a new task. Requires a non-empty title. Returns 201 on success."""
     if not task.title or not task.title.strip():
         return JSONResponse(
             status_code=400,
@@ -64,6 +74,7 @@ def create_task(task: TaskCreate):
 
 @app.put("/tasks/{task_id}")
 def update_task(task_id: int, update: TaskUpdate):
+    """Updates a task's title and/or done status. 404 if the task doesn't exist."""
     if update.title is not None and not update.title.strip():
         return JSONResponse(
             status_code=400,
@@ -85,6 +96,7 @@ def update_task(task_id: int, update: TaskUpdate):
 
 @app.delete("/tasks/{task_id}")
 def delete_task(task_id: int):
+    """Deletes a task by id. Returns 204 on success, 404 if not found."""
     for i, task in enumerate(tasks):
         if task["id"] == task_id:
             tasks.pop(i)
