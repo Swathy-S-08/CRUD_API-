@@ -2,7 +2,44 @@ from fastapi import FastAPI, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional
+import sqlite3
 
+DB_FILE = "tasks.db"
+
+def get_connection():
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def init_db():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            done INTEGER NOT NULL DEFAULT 0
+        )
+    """)
+
+    cursor.execute("SELECT COUNT(*) FROM tasks")
+    count = cursor.fetchone()[0]
+
+    if count == 0:
+        cursor.executemany(
+            "INSERT INTO tasks (title, done) VALUES (?, ?)",
+            [
+                ("Learn FastAPI", 0),
+                ("Build a CRUD API", 0),
+                ("Push to GitHub", 1),
+            ]
+        )
+
+    conn.commit()
+    conn.close()
+
+init_db()
 
 app = FastAPI(
     title="Task API",
@@ -20,8 +57,8 @@ class TaskCreate(BaseModel):
     title: Optional[str] = None
 
 class TaskUpdate(BaseModel):
-    title: Optional[str]=None
-    done: Optional[bool]=None
+    title: Optional[str] = None
+    done: Optional[bool] = None
 
 @app.get("/")
 def read_root():
@@ -43,16 +80,15 @@ def get_tasks():
     return tasks
 
 @app.get("/tasks/{task_id}")
-def get_task(task_id:int):
+def get_task(task_id: int):
     """Returns a single task by id. 404 if it doesn't exist."""
     for task in tasks:
-        if task["id"]==task_id:
+        if task["id"] == task_id:
             return task
-        return JSONResponse(
-            status_code=404,
-            content={"error":f"Task {task_id} not found"}
-        )
-    
+    return JSONResponse(
+        status_code=404,
+        content={"error": f"Task {task_id} not found"}
+    )
 
 @app.post("/tasks")
 def create_task(task: TaskCreate):
