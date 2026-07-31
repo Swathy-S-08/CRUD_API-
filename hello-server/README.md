@@ -98,11 +98,31 @@ I rewrote my prompt to explicitly specify: the field name `done` (not `completed
 
 **What changed:** nothing — the regenerated code was byte-for-byte identical to the first attempt, down to the same field name, same nested error shape, same extra `PATCH` endpoint, and same `200` on delete. My more precise prompt had no effect on the output, which was the most interesting result of this stage: it suggests the AI tool reused/anchored to its earlier answer rather than genuinely re-reasoning from the new prompt, and it's a reminder that "asked more precisely" doesn't automatically mean "got a different or better answer" — regeneration behavior matters as much as prompt wording.
 
-## Exploring the database directly (Stage 4)
+## Database
 
-I opened `tasks.db` in DB Browser for SQLite and ran queries directly against it, outside the API.
+This project uses **SQLite** for storage — chosen because it's a single file (`tasks.db`), requires zero setup or separate server, and means your data survives a server restart, unlike the in-memory version from Assignment 1.
 
-Example query:
+`tasks.db` is created automatically the first time the app runs — it's git-ignored, so each fresh clone starts with its own freshly seeded database (3 example tasks).
+
+## How to run it
+
+```bash
+git clone https://github.com/Swathy-S-08/CRUD_API-.git
+cd CRUD_API-/hello-server
+python -m venv venv
+venv\Scripts\activate        # Windows
+pip install fastapi uvicorn
+uvicorn main:app --reload --port 8000
+```
+
+Then visit `http://localhost:8000`. `tasks.db` and its table are created automatically on first run, seeded with 3 example tasks.
+
+## Database screenshot
+
+![Database in DB Browser](screenshots/db-browser.png)
+
+## Example SQL query (from Stage 4)
+
 ```sql
 SELECT COUNT(*) FROM tasks;
 ```
