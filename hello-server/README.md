@@ -97,3 +97,14 @@ I never specified the exact JSON shape for error bodies, so the AI defaulted to 
 I rewrote my prompt to explicitly specify: the field name `done` (not `completed`), a flat error shape `{"error": "..."}` instead of FastAPI's default `detail` wrapper, that a missing/empty title must return a hand-checked `400` rather than Pydantic's automatic `422`, that DELETE must return `204` with an empty body, and that no endpoints beyond the five CRUD routes should be added.
 
 **What changed:** nothing — the regenerated code was byte-for-byte identical to the first attempt, down to the same field name, same nested error shape, same extra `PATCH` endpoint, and same `200` on delete. My more precise prompt had no effect on the output, which was the most interesting result of this stage: it suggests the AI tool reused/anchored to its earlier answer rather than genuinely re-reasoning from the new prompt, and it's a reminder that "asked more precisely" doesn't automatically mean "got a different or better answer" — regeneration behavior matters as much as prompt wording.
+
+## Exploring the database directly (Stage 4)
+
+I opened `tasks.db` in DB Browser for SQLite and ran queries directly against it, outside the API.
+
+Example query:
+```sql
+SELECT COUNT(*) FROM tasks;
+```
+
+This returned `3`, confirming the seed data was still intact and hadn't duplicated across restarts. After running an `UPDATE tasks SET done = 1;` and clicking "Write Changes" in DB Browser, calling `GET /tasks` on my running API immediately showed all tasks marked as done — no restart needed, since the API and DB Browser read the exact same `tasks.db` file.
