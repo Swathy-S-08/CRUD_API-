@@ -113,9 +113,18 @@ def create_task(task: TaskCreate):
             content={"error": "Title is required"}
         )
 
-    next_id = max((t["id"] for t in tasks), default=0) + 1
-    new_task = {"id": next_id, "title": task.title, "done": False}
-    tasks.append(new_task)
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        "INSERT INTO tasks (title,done) VALUES (?, ?)",
+        (task.title,0)
+    )
+
+    conn.commit()
+    new_id=cursor.lastrowid
+    conn.close()
+
+    new_task={"id":new_id,"title":task.title,"done":False}
 
     return JSONResponse(
         status_code=201,
