@@ -47,11 +47,7 @@ app = FastAPI(
     version="1.0"
 )
 
-tasks = [
-    {"id": 1, "title": "Learn FastAPI", "done": False},
-    {"id": 2, "title": "Build a CRUD API", "done": False},
-    {"id": 3, "title": "Push to GitHub", "done": True},
-]
+
 
 class TaskCreate(BaseModel):
     title: Optional[str] = None
@@ -140,28 +136,51 @@ def update_task(task_id: int, update: TaskUpdate):
             content={"error": "Title cannot be empty"}
         )
 
-    for task in tasks:
-        if task["id"] == task_id:
-            if update.title is not None:
-                task["title"] = update.title
-            if update.done is not None:
-                task["done"] = update.done
-            return task
+    conn=get_connection()
+    cursor=conn.cursor()
 
-    return JSONResponse(
-        status_code=404,
-        content={"error": f"Task {task_id} not found"}
+    cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
+    existing=cursor.fetchone()
+
+    if existing is None:
+        conn.close()
+        return JSONResponse(
+            status_code=404,
+            content={"error": "Task not found"}
+        )
+
+    new_title = update.title if update.title is not None else existing["title"]
+    new_done = int(update.done) if update.done is not None else existing["done"]
+
+    cursor.execute(
+        "UPDATE tasks SET title=?, done=? WHERE id=?",
+        (new_title, new_done, task_id)
     )
+
+    conn.commit()
+    conn.close()
+
+    updated_task = {"id": task_id, "title": new_title, "done": bool(new_done)}
+    return updated_task
 
 @app.delete("/tasks/{task_id}")
 def delete_task(task_id: int):
     """Deletes a task by id. Returns 204 on success, 404 if not found."""
-    for i, task in enumerate(tasks):
-        if task["id"] == task_id:
-            tasks.pop(i)
-            return Response(status_code=204)
+    conn=get_connection()
+    cursor=conn.cursor()
 
-    return JSONResponse(
-        status_code=404,
-        content={"error": f"Task {task_id} not found"}
-    )
+    cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
+    existing=cursor.fetchone()
+
+    if existing is None:
+            conn.close()
+            return JSONResponse(
+                status_code=404,
+                content={"error": "Task not found"}
+            )
+
+    cursor.execute("DELETE FROM tasks WHERE id=?", (task_id,))
+    conn.commit()
+    conn.close()
+
+    return Response(status_code=204)
