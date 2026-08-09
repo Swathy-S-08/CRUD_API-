@@ -2,13 +2,16 @@ from fastapi import FastAPI, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional
-import sqlite3
+import psycopg
+import os
+from dotenv import load_dotenv
 
-DB_FILE = "tasks.db"
+load_dotenv()
+
+DATABASE_URL=os.getenv("DATABASE_URL")
 
 def get_connection():
-    conn = sqlite3.connect(DB_FILE)
-    conn.row_factory = sqlite3.Row
+    conn = psycopg.connect(DATABASE_URL, row_factory=psycopg.rows.dict_row)
     return conn
 
 def init_db():
@@ -17,22 +20,22 @@ def init_db():
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS tasks (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             title TEXT NOT NULL,
-            done INTEGER NOT NULL DEFAULT 0
+            done BOOLEAN NOT NULL DEFAULT FALSE
         )
     """)
 
     cursor.execute("SELECT COUNT(*) FROM tasks")
-    count = cursor.fetchone()[0]
+    count = cursor.fetchone()["count"]
 
     if count == 0:
         cursor.executemany(
-            "INSERT INTO tasks (title, done) VALUES (?, ?)",
+            "INSERT INTO tasks (title, done) VALUES (%s, %s)",
             [
-                ("Learn FastAPI", 0),
-                ("Build a CRUD API", 0),
-                ("Push to GitHub", 1),
+                ("Learn FastAPI", False),
+                ("Build a CRUD API", False),
+                ("Push to GitHub", True),
             ]
         )
 
