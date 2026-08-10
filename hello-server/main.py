@@ -114,15 +114,13 @@ def create_task(task: TaskCreate):
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO tasks (title,done) VALUES (?, ?)",
-        (task.title,0)
+        "INSERT INTO tasks (title,done) VALUES (%s, %s) RETURNING *",
+        (task.title,False)
     )
 
+    new_task=cursor.fetchone()
     conn.commit()
-    new_id=cursor.lastrowid
     conn.close()
-
-    new_task={"id":new_id,"title":task.title,"done":False}
 
     return JSONResponse(
         status_code=201,
@@ -141,7 +139,7 @@ def update_task(task_id: int, update: TaskUpdate):
     conn=get_connection()
     cursor=conn.cursor()
 
-    cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
+    cursor.execute("SELECT * FROM tasks WHERE id = %s", (task_id,))
     existing=cursor.fetchone()
 
     if existing is None:
@@ -152,10 +150,10 @@ def update_task(task_id: int, update: TaskUpdate):
         )
 
     new_title = update.title if update.title is not None else existing["title"]
-    new_done = int(update.done) if update.done is not None else existing["done"]
+    new_done = update.done if update.done is not None else existing["done"]
 
     cursor.execute(
-        "UPDATE tasks SET title=?, done=? WHERE id=?",
+        "UPDATE tasks SET title=%s, done=%s WHERE id=%s",
         (new_title, new_done, task_id)
     )
 
@@ -171,7 +169,7 @@ def delete_task(task_id: int):
     conn=get_connection()
     cursor=conn.cursor()
 
-    cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
+    cursor.execute("SELECT * FROM tasks WHERE id = %s", (task_id,))
     existing=cursor.fetchone()
 
     if existing is None:
@@ -181,7 +179,7 @@ def delete_task(task_id: int):
                 content={"error": "Task not found"}
             )
 
-    cursor.execute("DELETE FROM tasks WHERE id=?", (task_id,))
+    cursor.execute("DELETE FROM tasks WHERE id=%s", (task_id,))
     conn.commit()
     conn.close()
 
