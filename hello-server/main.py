@@ -82,15 +82,14 @@ def get_tasks():
     rows = cursor.fetchall()
     conn.close()
 
-    result = [dict(row) for row in rows]
-    return result
+    return rows
 
 @app.get("/tasks/{task_id}")
 def get_task(task_id: int):
     """Returns a single task by id, from the database. 404 if it doesn't exist."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
+    cursor.execute("SELECT * FROM tasks WHERE id = %s", (task_id,))
     row = cursor.fetchone()
     conn.close()
 
