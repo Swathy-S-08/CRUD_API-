@@ -2,6 +2,47 @@
 
 A simple CRUD API for managing tasks, built with FastAPI as part of the FlyRank AI Internship.
 
+## Current setup (Assignment 3 — Postgres + Docker)
+
+This project now runs against a real **PostgreSQL** database, fully containerized with Docker. Both the app and database start together with a single command.
+
+### Run it
+
+```bash
+git clone https://github.com/Swathy-S-08/CRUD_API-.git
+cd CRUD_API-/hello-server
+cp .env.example .env
+docker compose up
+```
+
+Then visit `http://localhost:8000`.
+
+### Environment variables
+
+Copy `.env.example` to `.env` and adjust if needed. It sets:
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | Postgres connection string, e.g. `postgres://postgres:dev@db:5432/tasks` |
+
+### Endpoints
+
+| Method | Endpoint | Description | Success | Error |
+|--------|----------|--------------|---------|--------|
+| GET | `/` | API info | 200 | — |
+| GET | `/health` | Health check | 200 | — |
+| GET | `/tasks` | List all tasks | 200 | — |
+| GET | `/tasks/{id}` | Get a single task | 200 | 404 if not found |
+| POST | `/tasks` | Create a task (`{"title": "..."}`) | 201 | 400 if title missing/empty |
+| PUT | `/tasks/{id}` | Update a task's title and/or done | 200 | 404 if not found, 400 if title invalid |
+| DELETE | `/tasks/{id}` | Delete a task | 204 | 404 if not found |
+
+### Example request
+
+```
+curl -i http://localhost:8000/tasks
+```
+
 ## What this is
 
 A REST API with an in-memory task list supporting full CRUD operations (Create, Read, Update, Delete), input validation, and interactive documentation via Swagger UI.
