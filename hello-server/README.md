@@ -43,59 +43,61 @@ Copy `.env.example` to `.env` and adjust if needed. It sets:
 curl -i http://localhost:8000/tasks
 ```
 
-## What this is
-
-A REST API with an in-memory task list supporting full CRUD operations (Create, Read, Update, Delete), input validation, and interactive documentation via Swagger UI.
-
-## How to run it
-
-```bash
-git clone https://github.com/Swathy-S-08/CRUD_API-.git
-cd CRUD_API-/hello-server
-python -m venv venv
-venv\Scripts\activate        # Windows
-pip install fastapi uvicorn
-uvicorn main:app --reload --port 8000
-```
-
-Then visit `http://localhost:8000`.
-
-## Endpoints
-
-| Method | Endpoint         | Description                          | Success | Error                     |
-|--------|------------------|---------------------------------------|---------|----------------------------|
-| GET    | `/`              | API info                              | 200     | —                          |
-| GET    | `/health`        | Health check                          | 200     | —                          |
-| GET    | `/tasks`         | List all tasks                        | 200     | —                          |
-| GET    | `/tasks/{id}`    | Get a single task                     | 200     | 404 if not found           |
-| POST   | `/tasks`         | Create a task (`{"title": "..."}`)    | 201     | 400 if title missing/empty |
-| PUT    | `/tasks/{id}`    | Update a task's title and/or done     | 200     | 404 if not found, 400 if title invalid |
-| DELETE | `/tasks/{id}`    | Delete a task                         | 204     | 404 if not found           |
-
-## Example request
-
-```
-curl -i http://localhost:8000/tasks/1
-```
-
 ```
 HTTP/1.1 200 OK
-date: Sun, 19 Jul 2026 15:27:04 GMT
+date: Mon, 11 Aug 2026 16:29:10 GMT
 server: uvicorn
-content-length: 44
+content-length: 142
 content-type: application/json
 
-{"id":1,"title":"Learn FastAPI","done":true}
+[{"id":1,"title":"Learn FastAPI","done":false},{"id":2,"title":"Build a CRUD API","done":false},{"id":3,"title":"Push to GitHub","done":true}]
 ```
 
-## Interactive docs
+### Data persistence
 
-FastAPI auto-generates Swagger UI at `/docs`:
+Task data lives in a Docker volume (`taskdata`), so it survives a full `docker compose down` + `docker compose up` — verified during development by creating tasks, tearing the stack down, bringing it back up, and confirming the same tasks were still present.
 
-![Swagger UI](screenshots/swagger.png)
+### Database screenshot
 
+![Postgres data via psql](screenshots/postgres-data.png)
 
-## AI vs me - Assignment 1
+---
+
+## AI vs me — Assignment 3 (Containerize the stack)
+
+### My prompt
+
+> I want my app to be connected to a real live database. So let's containerize the tasks into Postgres. All five endpoints with identical behaviour to my hand-built version. The password should be from `.env`, it should not be hardcoded. Use parameterized queries, never insert the user input directly. Use a Docker volume so that the database data persists even when it is removed. Give me the files with these changes.
+
+### What the AI did better
+
+- **Healthcheck on the `db` service.** The AI used a `pg_isready`-based healthcheck combined with `depends_on: condition: service_healthy`, so the `api` container actually waits until Postgres is ready to accept connections before starting. My version only uses a plain `depends_on`, which starts `db` first but doesn't wait for it to finish initializing — this is exactly the "is the server running on that host" race condition I hit the first time I ran `docker compose up`.
+- **Pinned the Postgres image version** (`postgres:17`) instead of `latest`. My version uses `latest`, which pulled Postgres 18 and immediately broke on the old volume mount path (`/var/lib/postgresql/data`) — a real bug I had to debug and fix by switching to `/var/lib/postgresql`. Pinning the version avoids that entire class of surprise.
+- **Fails fast if the password is missing.** The AI's code explicitly checks `if not DB_PASSWORD: raise RuntimeError(...)` at startup, so a missing `.env` value errors immediately and loudly instead of silently hanging (which is what happened to me when `DATABASE_URL` came back as `None` due to a typo).
+- **Stricter input validation** — it rejects a `done` field that isn't a real boolean, which my version doesn't check at all.
+- **`closing()` context manager** around every database connection, guaranteeing the connection is released even if an error occurs mid-request.
+
+### What it got wrong or ignored
+
+- **Missing `GET /` and `GET /health`.** Both are present in my hand-built version but absent from the AI's, since I didn't mention them in this prompt either — the same gap that showed up in my A1 and A2 rematches.
+- **Uses the deprecated `@app.on_event("startup")` pattern** instead of FastAPI's current `lifespan` context manager.
+- **Thinner README** — no endpoint table, no example `curl` output, and no explanation of what `.env.example` is for.
+- **No `.env.example` committed alongside a real `.env`-based setup** — the assignment requires committing a placeholder `.env.example`; the AI's output didn't include one by default.
+- **Code fragmented across multiple files between assignments.** Rather than evolving one `main.py` in place the way I did (SQLite → Postgres, all in the same file, tracked through commit history), the AI's generations across assignments produced separate files (`main.py`, `main_updated.py`, `main3.py`). Same underlying issue as the first attempt not reusing/updating a single source of truth.
+
+### What my prompt forgot to specify
+
+I didn't mention `GET /` or `GET /health` in this prompt (same recurring gap from my earlier prompts), so the AI reasonably didn't build them. I also didn't specify a Postgres image version, which is exactly why the AI made its own (better) choice to pin `postgres:17` — a good reminder that being unspecific sometimes lets the AI make a smarter call than I did on my own.
+
+### The rematch
+
+I updated my prompt to explicitly require: include `GET /` and `GET /health`, commit a `.env.example` file alongside real `.env` usage, use parameterized queries, use a Docker volume for persistence, pin the Postgres image to a specific version instead of `latest`, and write the whole app as a single `main.py` file rather than splitting it across multiple files.
+
+**What changed:** every single requested fix showed up in the regenerated output. `GET /` and `GET /health` were both added (with `/health` going further than asked — it runs a real `SELECT 1` against the database and returns `503` if the database is unreachable). A `.env.example` was included this time. The Postgres image was pinned even more specifically than before (`postgres:17.6` vs. the first attempt's `postgres:17`). And the whole app came back as one `main.py` file instead of fragmenting into `main.py` / `main_updated.py` / `main3.py` across generations, directly fixing the drift I'd noticed compared to my own single evolving file. As a bonus I hadn't explicitly asked for, it also swapped the deprecated `@app.on_event("startup")` pattern (flagged as an issue in the first attempt) for FastAPI's modern `lifespan` context manager. This is a sharp contrast to my Assignment 1 rematch, where a more precise prompt produced byte-for-byte identical code — here, the AI clearly re-reasoned from the new prompt and incorporated every correction.
+
+---
+
+## AI vs me — Assignment 1
 
 ### My prompt (first attempt)
 
@@ -169,31 +171,10 @@ I corrected my prompt to say: use the exact filename `tasks.db`, include `GET /`
 
 ## Database
 
-This project uses **SQLite** for storage — chosen because it's a single file (`tasks.db`), requires zero setup or separate server, and means your data survives a server restart, unlike the in-memory version from Assignment 1.
+This project used **SQLite** for storage in Assignment 2 (a single file, `tasks.db`, requiring zero setup). Assignment 3 migrated storage to **PostgreSQL**, running in Docker — see the "Current setup" section at the top of this README for how to run it now.
 
-`tasks.db` is created automatically the first time the app runs — it's git-ignored, so each fresh clone starts with its own freshly seeded database (3 example tasks).
+## Interactive docs
 
-## How to run it
+FastAPI auto-generates Swagger UI at `/docs`:
 
-```bash
-git clone https://github.com/Swathy-S-08/CRUD_API-.git
-cd CRUD_API-/hello-server
-python -m venv venv
-venv\Scripts\activate        # Windows
-pip install fastapi uvicorn
-uvicorn main:app --reload --port 8000
-```
-
-Then visit `http://localhost:8000`. `tasks.db` and its table are created automatically on first run, seeded with 3 example tasks.
-
-## Database screenshot
-
-![Database in DB Browser](screenshots/db-browser.png)
-
-## Example SQL query (from Stage 4)
-
-```sql
-SELECT COUNT(*) FROM tasks;
-```
-
-This returned `3`, confirming the seed data was still intact and hadn't duplicated across restarts. After running an `UPDATE tasks SET done = 1;` and clicking "Write Changes" in DB Browser, calling `GET /tasks` on my running API immediately showed all tasks marked as done — no restart needed, since the API and DB Browser read the exact same `tasks.db` file.
+![Swagger UI](screenshots/swagger.png)
