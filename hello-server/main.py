@@ -194,3 +194,61 @@ def delete_task(task_id: int):
     conn.close()
 
     return Response(status_code=204)
+class AuthCredentials(BaseModel):
+    email: Optional[str] = None
+    password: Optional[str] = None
+
+
+@app.post("/auth/signup")
+def signup(credentials: AuthCredentials):
+    """Creates a new user account via Supabase Auth. Returns 201 on success, 400 if email/password missing."""
+    if not credentials.email or not credentials.password:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Email and password are required"}
+        )
+
+    try:
+        result = supabase.auth.sign_up({
+            "email": credentials.email,
+            "password": credentials.password
+        })
+    except Exception as e:
+        return JSONResponse(
+            status_code=400,
+            content={"error": str(e)}
+        )
+
+    return JSONResponse(
+        status_code=201,
+        content={"user": result.user.model_dump(mode="json")}
+    )
+
+
+@app.post("/auth/login")
+def login(credentials: AuthCredentials):
+    """Logs a user in via Supabase Auth. Returns 200 + access token on success, 400 if fields missing, 401 on bad credentials."""
+    if not credentials.email or not credentials.password:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Email and password are required"}
+        )
+
+    try:
+        result = supabase.auth.sign_in_with_password({
+            "email": credentials.email,
+            "password": credentials.password
+        })
+    except Exception as e:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Invalid login credentials"}
+        )
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "access_token": result.session.access_token,
+            "refresh_token": result.session.refresh_token
+        }
+    )
