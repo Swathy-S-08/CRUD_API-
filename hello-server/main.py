@@ -1,5 +1,5 @@
 
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, Header
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional
@@ -252,3 +252,31 @@ def login(credentials: AuthCredentials):
             "refresh_token": result.session.refresh_token
         }
     )
+
+@app.get("/public/info")
+def public_info():
+    """Public endpoint — no auth required."""
+    return JSONResponse(
+        status_code=200,
+        content={"message": "Welcome stranger! This info is public."}
+    )
+
+
+@app.get("/protected/profile")
+def get_profile(authorization: Optional[str] = Header(None)):
+    """Protected endpoint — requires a Bearer token in the Authorization header. (Not verified yet — Stage 3.)"""
+    if not authorization or not authorization.startswith("Bearer "):
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Access token required"}
+        )
+
+    token = authorization.removeprefix("Bearer ").strip()
+
+    if not token:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Access token required"}
+        )
+
+    return {"message": "token received (not yet verified)", "token_preview": token[:10] + "..."}
