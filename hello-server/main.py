@@ -278,5 +278,23 @@ def get_profile(authorization: Optional[str] = Header(None)):
             status_code=401,
             content={"error": "Access token required"}
         )
+    try:
+        result = supabase.auth.get_user(token)
+    except Exception:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Invalid or expired token"}
+        )
 
-    return {"message": "token received (not yet verified)", "token_preview": token[:10] + "..."}
+    if result is None or result.user is None:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Invalid or expired token"}
+        )
+
+    user = result.user
+    return {
+        "id": user.id,
+        "email": user.email,
+        "created_at": user.created_at.isoformat() if user.created_at else None
+    }
