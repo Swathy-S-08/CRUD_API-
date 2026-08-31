@@ -1,3 +1,4 @@
+
 from fastapi import FastAPI, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -5,6 +6,15 @@ from typing import Optional
 import psycopg
 import os
 from dotenv import load_dotenv
+from supabase import create_client, Client   # NEW
+
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+SUPABASE_URL = os.getenv("SUPABASE_URL")     # NEW
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")     # NEW
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)   # NEW
 
 load_dotenv()
 
@@ -42,7 +52,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-init_db()
+#init_db()  commented out for A4 — don't need Postgres running for auth work
 
 app = FastAPI(
     title="Task API",
