@@ -1,105 +1,184 @@
-# Task API
+# Task API — FlyRank AI Internship
 
-A simple CRUD API for managing tasks, built with FastAPI as part of the FlyRank AI Internship.
+A CRUD + auth API built incrementally across the FlyRank AI Internship backend track, using Python and FastAPI. Each assignment below builds on the last, in the same repo.
 
-## What this is
+- **A1** — In-memory CRUD API
+- **A2** — SQLite persistence
+- **A3** — PostgreSQL + Docker
+- **A4** — Supabase Auth (sign up, log in, log out, protected routes) ← **current**
 
-A REST API with an in-memory task list supporting full CRUD operations (Create, Read, Update, Delete), input validation, and interactive documentation via Swagger UI.
+---
 
-## How to run it
+# A4 — Auth: Login & protect
+
+Adds Supabase Auth on top of the existing API: sign up, log in, log out, JWT verification, and protected routes, documented in Swagger.
+
+## Run it
 
 ```bash
 git clone https://github.com/Swathy-S-08/CRUD_API-.git
 cd CRUD_API-/hello-server
+cp .env.example .env       # then fill in your own Supabase project values
 python -m venv venv
-venv\Scripts\activate        # Windows
-pip install fastapi uvicorn
-uvicorn main:app --reload --port 8000
+venv\Scripts\Activate.ps1  # Windows PowerShell
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+
+Visit `http://localhost:8000/docs` for interactive Swagger docs.
+
+## Environment variables
+
+| Variable | Description |
+|---|---|
+| `SUPABASE_URL` | Your Supabase project URL (Project Settings → API) |
+| `SUPABASE_KEY` | Your Supabase **anon/publishable** key — never the `service_role` key |
+| `PORT` | Port the server runs on (default `8000`) |
+| `DATABASE_URL` | Postgres connection string, carried over from A3 (not required for A4) |
+
+Copy `.env.example` to `.env` and fill in your own values. `.env` is git-ignored; no real keys are committed.
+
+## Endpoints
+
+| Method | Endpoint | Auth required | Description | Success | Error |
+|--------|----------|----------------|-------------|---------|--------|
+| POST | `/auth/signup` | none | Create a new account | 201 | 400 missing fields |
+| POST | `/auth/login` | none | Log in, returns JWT | 200 | 400 missing fields, 401 invalid credentials |
+| POST | `/auth/logout` | Bearer token | End the session | 204 | 401 missing/invalid token |
+| GET | `/protected/profile` | Bearer token | Read your own profile | 200 | 401 missing/invalid/expired token |
+| GET | `/protected/dashboard` | Bearer token | Second protected route, proves the guard is reusable | 200 | 401 missing/invalid/expired token |
+| GET | `/public/info` | none | Open, public data | 200 | — |
+
+All error responses use a flat shape: `{"error": "..."}`.
+
+## How it works
+
+1. **Sign up / log in** — the server forwards email + password straight to Supabase Auth (`supabase.auth.sign_up` / `sign_in_with_password`). Passwords are never hashed or stored by this app — Supabase owns that entirely.
+2. **Token verification** — protected routes read the `Authorization: Bearer <token>` header, then call `supabase.auth.get_user(token)`, which makes a real network call to Supabase to confirm the token is genuine and unexpired.
+3. **Reusable guard** — verification logic lives in one FastAPI dependency, `get_current_user`, applied to every protected route with `Depends(get_current_user)`. Adding a new protected route needs no new auth code.
+4. **Swagger bearer auth** — an `HTTPBearer` security scheme is attached to `get_current_user`, so `/docs` shows a lock icon on protected routes and supports pasting a token once via the **Authorize** button.
+
+## Checkpoint — full flow verified
+
+**Via curl:**
+```
+signup → 201
+login → 200 + access_token
+protected/profile with token → 200 + user details
+protected/profile with tampered token → 401 {"error": "Invalid or expired token"}
+protected/profile with no token → 401 {"error": "Access token required"}
+```
+
+**Via Swagger UI:** Authorized with a token via the padlock, then ran `/protected/profile` → `Try it out` → `Execute` → 200, no manual headers typed.
+
+![Swagger UI with bearer auth](screenshots/swagger-auth.png)
+
+## AI vs me — Assignment 4
+
+*(To be completed as part of Stage 7 — the AI rematch.)*
+
+---
+
+# A3 — PostgreSQL + Docker
+
+This project runs against a real **PostgreSQL** database, fully containerized with Docker. Both the app and database start together with a single command.
+
+## Run it
+
+```bash
+git clone https://github.com/Swathy-S-08/CRUD_API-.git
+cd CRUD_API-/hello-server
+cp .env.example .env
+docker compose up
 ```
 
 Then visit `http://localhost:8000`.
 
+## Environment variables
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | Postgres connection string, e.g. `postgres://postgres:dev@db:5432/tasks` |
+
 ## Endpoints
 
-| Method | Endpoint         | Description                          | Success | Error                     |
-|--------|------------------|---------------------------------------|---------|----------------------------|
-| GET    | `/`              | API info                              | 200     | —                          |
-| GET    | `/health`        | Health check                          | 200     | —                          |
-| GET    | `/tasks`         | List all tasks                        | 200     | —                          |
-| GET    | `/tasks/{id}`    | Get a single task                     | 200     | 404 if not found           |
-| POST   | `/tasks`         | Create a task (`{"title": "..."}`)    | 201     | 400 if title missing/empty |
-| PUT    | `/tasks/{id}`    | Update a task's title and/or done     | 200     | 404 if not found, 400 if title invalid |
-| DELETE | `/tasks/{id}`    | Delete a task                         | 204     | 404 if not found           |
+| Method | Endpoint | Description | Success | Error |
+|--------|----------|--------------|---------|--------|
+| GET | `/` | API info | 200 | — |
+| GET | `/health` | Health check | 200 | — |
+| GET | `/tasks` | List all tasks | 200 | — |
+| GET | `/tasks/{id}` | Get a single task | 200 | 404 if not found |
+| POST | `/tasks` | Create a task (`{"title": "..."}`) | 201 | 400 if title missing/empty |
+| PUT | `/tasks/{id}` | Update a task's title and/or done | 200 | 404 if not found, 400 if title invalid |
+| DELETE | `/tasks/{id}` | Delete a task | 204 | 404 if not found |
 
 ## Example request
 
 ```
-curl -i http://localhost:8000/tasks/1
+curl -i http://localhost:8000/tasks
 ```
 
 ```
 HTTP/1.1 200 OK
-date: Sun, 19 Jul 2026 15:27:04 GMT
+date: Mon, 11 Aug 2026 16:29:10 GMT
 server: uvicorn
-content-length: 44
+content-length: 142
 content-type: application/json
 
-{"id":1,"title":"Learn FastAPI","done":true}
+[{"id":1,"title":"Learn FastAPI","done":false},{"id":2,"title":"Build a CRUD API","done":false},{"id":3,"title":"Push to GitHub","done":true}]
 ```
 
-## Interactive docs
+## Data persistence
 
-FastAPI auto-generates Swagger UI at `/docs`:
+Task data lives in a Docker volume (`taskdata`), so it survives a full `docker compose down` + `docker compose up` — verified during development by creating tasks, tearing the stack down, bringing it back up, and confirming the same tasks were still present.
 
-![Swagger UI](screenshots/swagger.png)
+## Database screenshot
 
+![Postgres data via psql](screenshots/postgres-data.png)
 
-## AI vs me - Assignment 1
+## AI vs me — Assignment 3 (Containerize the stack)
 
-### My prompt (first attempt)
+### My prompt
 
-Build a REST API in Python using FastAPI with an in-memory list of tasks. Each task has an id, title, and a boolean done field, pre-filled with 3 example tasks. Include: GET /tasks to list all tasks, GET /tasks/{id} to get one task (404 with a JSON error if not found), POST /tasks to create a task from a JSON body (400 with a JSON error if title is missing or empty), PUT /tasks/{id} to update a task's title and/or done status (404 if not found), and DELETE /tasks/{id} to remove a task, returning 204 with no body. Enable Swagger UI docs.
+> I want my app to be connected to a real live database. So let's containerize the tasks into Postgres. All five endpoints with identical behaviour to my hand-built version. The password should be from `.env`, it should not be hardcoded. Use parameterized queries, never insert the user input directly. Use a Docker volume so that the database data persists even when it is removed. Give me the files with these changes.
 
 ### What the AI did better
 
-The AI used Pydantic models (`Task`, `TaskCreate`, `TaskUpdate`) as real class-based schemas instead of raw dicts, and factored the repeated "find task or 404" logic into one `find_task()` helper instead of the loop I copy-pasted into three endpoints. I understand this well enough to explain it: Pydantic validates incoming JSON shape automatically before the function body runs, and centralizing `find_task()` means the 404 check only has to be written and maintained once.
+- **Healthcheck on the `db` service.** The AI used a `pg_isready`-based healthcheck combined with `depends_on: condition: service_healthy`, so the `api` container actually waits until Postgres is ready to accept connections before starting. My version only uses a plain `depends_on`, which starts `db` first but doesn't wait for it to finish initializing — this is exactly the "is the server running on that host" race condition I hit the first time I ran `docker compose up`.
+- **Pinned the Postgres image version** (`postgres:17`) instead of `latest`. My version uses `latest`, which pulled Postgres 18 and immediately broke on the old volume mount path (`/var/lib/postgresql/data`) — a real bug I had to debug and fix by switching to `/var/lib/postgresql`. Pinning the version avoids that entire class of surprise.
+- **Fails fast if the password is missing.** The AI's code explicitly checks `if not DB_PASSWORD: raise RuntimeError(...)` at startup, so a missing `.env` value errors immediately and loudly instead of silently hanging (which is what happened to me when `DATABASE_URL` came back as `None` due to a typo).
+- **Stricter input validation** — it rejects a `done` field that isn't a real boolean, which my version doesn't check at all.
+- **`closing()` context manager** around every database connection, guaranteeing the connection is released even if an error occurs mid-request.
 
 ### What it got wrong or ignored
 
-- **404 error shape is nested, not flat.** `GET /tasks/99` returned:
+- **Missing `GET /` and `GET /health`.** Both are present in my hand-built version but absent from the AI's, since I didn't mention them in this prompt either — the same gap that showed up in my A1 and A2 rematches.
+- **Uses the deprecated `@app.on_event("startup")` pattern** instead of FastAPI's current `lifespan` context manager.
+- **Thinner README** — no endpoint table, no example `curl` output, and no explanation of what `.env.example` is for.
+- **No `.env.example` committed alongside a real `.env`-based setup** — the assignment requires committing a placeholder `.env.example`; the AI's output didn't include one by default.
+- **Code fragmented across multiple files between assignments.** Rather than evolving one `main.py` in place the way I did (SQLite → Postgres, all in the same file, tracked through commit history), the AI's generations across assignments produced separate files (`main.py`, `main_updated.py`, `main3.py`). Same underlying issue as the first attempt not reusing/updating a single source of truth.
 
-HTTP/1.1 404 Not Found
-{"detail":{"error":"task 99 not found"}}
-  I asked for a flat `{"error": "..."}`. FastAPI's `HTTPException(detail=...)` always wraps whatever you pass inside a `"detail"` key, so `detail={"error": ...}` produces this extra nesting.
+### What my prompt forgot to specify
 
-- **POST with missing title returns 422, not 400.** Posting `{}` to `/tasks` returned:
-HTTP/1.1 422 Unprocessable Content
-{"detail":[{"type":"missing","loc":["body","title"],"msg":"Field required",...}]}
-  I asked for `400`. Because the AI made `title: str` required directly on the Pydantic model, FastAPI intercepts the request before the function body runs and auto-returns its own `422` — it never wrote a hand-checked `400` like I did.
-
-- **DELETE returns 200 with a body, not 204 with an empty body.**
-HTTP/1.1 200 OK
-{"message":"task 1 deleted successfully"}
-  I was explicit about `204 No Content` with an empty body.
-
-- **Missing endpoints.** I forgot to mention `GET /` and `GET /health` in this prompt, so the AI didn't build them — a gap in my prompt, not the AI's fault.
-
-- **Unrequested extra endpoint.** The AI added `PATCH /tasks/{id}`, duplicating the PUT logic exactly, which I never asked for.
-
-- **Field name mismatch.** The AI used `completed` instead of `done`.
-
-### What my prompt forgot to specify — and what the AI silently decided
-
-I never specified the exact JSON shape for error bodies, so the AI defaulted to FastAPI's built-in `HTTPException`/`detail` convention. I didn't say "only build these five endpoints," so it added an unrequested `PATCH`. And I didn't pin down the exact field name, so it picked `completed` over `done` — a reasonable but silent decision that would break any client written against my original spec.
+I didn't mention `GET /` or `GET /health` in this prompt (same recurring gap from my earlier prompts), so the AI reasonably didn't build them. I also didn't specify a Postgres image version, which is exactly why the AI made its own (better) choice to pin `postgres:17` — a good reminder that being unspecific sometimes lets the AI make a smarter call than I did on my own.
 
 ### The rematch
 
-I rewrote my prompt to explicitly specify: the field name `done` (not `completed`), a flat error shape `{"error": "..."}` instead of FastAPI's default `detail` wrapper, that a missing/empty title must return a hand-checked `400` rather than Pydantic's automatic `422`, that DELETE must return `204` with an empty body, and that no endpoints beyond the five CRUD routes should be added.
+I updated my prompt to explicitly require: include `GET /` and `GET /health`, commit a `.env.example` file alongside real `.env` usage, use parameterized queries, use a Docker volume for persistence, pin the Postgres image to a specific version instead of `latest`, and write the whole app as a single `main.py` file rather than splitting it across multiple files.
 
-**What changed:** nothing — the regenerated code was byte-for-byte identical to the first attempt, down to the same field name, same nested error shape, same extra `PATCH` endpoint, and same `200` on delete. My more precise prompt had no effect on the output, which was the most interesting result of this stage: it suggests the AI tool reused/anchored to its earlier answer rather than genuinely re-reasoning from the new prompt, and it's a reminder that "asked more precisely" doesn't automatically mean "got a different or better answer" — regeneration behavior matters as much as prompt wording.
+**What changed:** every single requested fix showed up in the regenerated output. `GET /` and `GET /health` were both added (with `/health` going further than asked — it runs a real `SELECT 1` against the database and returns `503` if the database is unreachable). A `.env.example` was included this time. The Postgres image was pinned even more specifically than before (`postgres:17.6` vs. the first attempt's `postgres:17`). And the whole app came back as one `main.py` file instead of fragmenting into `main.py` / `main_updated.py` / `main3.py` across generations, directly fixing the drift I'd noticed compared to my own single evolving file. As a bonus I hadn't explicitly asked for, it also swapped the deprecated `@app.on_event("startup")` pattern (flagged as an issue in the first attempt) for FastAPI's modern `lifespan` context manager. This is a sharp contrast to my Assignment 1 rematch, where a more precise prompt produced byte-for-byte identical code — here, the AI clearly re-reasoned from the new prompt and incorporated every correction.
 
+---
 
-## AI vs me — Assignment 2 (SQLite migration)
+# A2 — SQLite migration
+
+Storage moved from an in-memory list to a **SQLite** database file, requiring zero setup.
+
+## Database
+
+SQLite, stored in a single file, `tasks.db`. Table created on startup if missing, seeded with three example tasks only if empty.
+
+## AI vs me — Assignment 2
 
 ### My prompt (first attempt)
 
@@ -125,34 +204,65 @@ I corrected my prompt to say: use the exact filename `tasks.db`, include `GET /`
 
 **What changed:** all three issues were fixed exactly as requested — the database file is now `tasks.db`, both `GET /` and `GET /health` are present, and the unrequested `PATCH` endpoint was removed. Everything else (the helper functions, the `closing()` pattern, the strict boolean validation) stayed the same between generations, since I didn't ask for those to change. This rematch went noticeably better than my A1 rematch, where the regenerated code was identical to the first attempt despite a more detailed prompt — here, the AI clearly incorporated every specific correction I made.
 
+---
 
-## Database
+# A1 — In-memory CRUD API
 
-This project uses **SQLite** for storage — chosen because it's a single file (`tasks.db`), requires zero setup or separate server, and means your data survives a server restart, unlike the in-memory version from Assignment 1.
+The original API: five CRUD endpoints backed by an in-memory Python list — no database yet.
 
-`tasks.db` is created automatically the first time the app runs — it's git-ignored, so each fresh clone starts with its own freshly seeded database (3 example tasks).
+## AI vs me — Assignment 1
 
-## How to run it
+### My prompt (first attempt)
 
-```bash
-git clone https://github.com/Swathy-S-08/CRUD_API-.git
-cd CRUD_API-/hello-server
-python -m venv venv
-venv\Scripts\activate        # Windows
-pip install fastapi uvicorn
-uvicorn main:app --reload --port 8000
+Build a REST API in Python using FastAPI with an in-memory list of tasks. Each task has an id, title, and a boolean done field, pre-filled with 3 example tasks. Include: GET /tasks to list all tasks, GET /tasks/{id} to get one task (404 with a JSON error if not found), POST /tasks to create a task from a JSON body (400 with a JSON error if title is missing or empty), PUT /tasks/{id} to update a task's title and/or done status (404 if not found), and DELETE /tasks/{id} to remove a task, returning 204 with no body. Enable Swagger UI docs.
+
+### What the AI did better
+
+The AI used Pydantic models (`Task`, `TaskCreate`, `TaskUpdate`) as real class-based schemas instead of raw dicts, and factored the repeated "find task or 404" logic into one `find_task()` helper instead of the loop I copy-pasted into three endpoints. I understand this well enough to explain it: Pydantic validates incoming JSON shape automatically before the function body runs, and centralizing `find_task()` means the 404 check only has to be written and maintained once.
+
+### What it got wrong or ignored
+
+- **404 error shape is nested, not flat.** `GET /tasks/99` returned:
 ```
-
-Then visit `http://localhost:8000`. `tasks.db` and its table are created automatically on first run, seeded with 3 example tasks.
-
-## Database screenshot
-
-![Database in DB Browser](screenshots/db-browser.png)
-
-## Example SQL query (from Stage 4)
-
-```sql
-SELECT COUNT(*) FROM tasks;
+HTTP/1.1 404 Not Found
+{"detail":{"error":"task 99 not found"}}
 ```
+  I asked for a flat `{"error": "..."}`. FastAPI's `HTTPException(detail=...)` always wraps whatever you pass inside a `"detail"` key, so `detail={"error": ...}` produces this extra nesting.
 
-This returned `3`, confirming the seed data was still intact and hadn't duplicated across restarts. After running an `UPDATE tasks SET done = 1;` and clicking "Write Changes" in DB Browser, calling `GET /tasks` on my running API immediately showed all tasks marked as done — no restart needed, since the API and DB Browser read the exact same `tasks.db` file.
+- **POST with missing title returns 422, not 400.** Posting `{}` to `/tasks` returned:
+```
+HTTP/1.1 422 Unprocessable Content
+{"detail":[{"type":"missing","loc":["body","title"],"msg":"Field required",...}]}
+```
+  I asked for `400`. Because the AI made `title: str` required directly on the Pydantic model, FastAPI intercepts the request before the function body runs and auto-returns its own `422` — it never wrote a hand-checked `400` like I did.
+
+- **DELETE returns 200 with a body, not 204 with an empty body.**
+```
+HTTP/1.1 200 OK
+{"message":"task 1 deleted successfully"}
+```
+  I was explicit about `204 No Content` with an empty body.
+
+- **Missing endpoints.** I forgot to mention `GET /` and `GET /health` in this prompt, so the AI didn't build them — a gap in my prompt, not the AI's fault.
+
+- **Unrequested extra endpoint.** The AI added `PATCH /tasks/{id}`, duplicating the PUT logic exactly, which I never asked for.
+
+- **Field name mismatch.** The AI used `completed` instead of `done`.
+
+### What my prompt forgot to specify — and what the AI silently decided
+
+I never specified the exact JSON shape for error bodies, so the AI defaulted to FastAPI's built-in `HTTPException`/`detail` convention. I didn't say "only build these five endpoints," so it added an unrequested `PATCH`. And I didn't pin down the exact field name, so it picked `completed` over `done` — a reasonable but silent decision that would break any client written against my original spec.
+
+### The rematch
+
+I rewrote my prompt to explicitly specify: the field name `done` (not `completed`), a flat error shape `{"error": "..."}` instead of FastAPI's default `detail` wrapper, that a missing/empty title must return a hand-checked `400` rather than Pydantic's automatic `422`, that DELETE must return `204` with an empty body, and that no endpoints beyond the five CRUD routes should be added.
+
+**What changed:** nothing — the regenerated code was byte-for-byte identical to the first attempt, down to the same field name, same nested error shape, same extra `PATCH` endpoint, and same `200` on delete. My more precise prompt had no effect on the output, which was the most interesting result of this stage: it suggests the AI tool reused/anchored to its earlier answer rather than genuinely re-reasoning from the new prompt, and it's a reminder that "asked more precisely" doesn't automatically mean "got a different or better answer" — regeneration behavior matters as much as prompt wording.
+
+---
+
+## Interactive docs
+
+FastAPI auto-generates Swagger UI at `/docs`:
+
+![Swagger UI](screenshots/swaggerA4.png)
