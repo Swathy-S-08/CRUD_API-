@@ -71,7 +71,7 @@ protected/profile with no token → 401 {"error": "Access token required"}
 
 **Via Swagger UI:** Authorized with a token via the padlock, then ran `/protected/profile` → `Try it out` → `Execute` → 200, no manual headers typed.
 
-![Swagger UI with bearer auth](screenshots/swagger-auth.png)
+![Swagger UI with bearer auth](screenshots/swaggerA4.png)
 
 ## AI vs me — Assignment 4
 
@@ -265,4 +265,4 @@ I rewrote my prompt to explicitly specify: the field name `done` (not `completed
 
 FastAPI auto-generates Swagger UI at `/docs`:
 
-![Swagger UI](screenshots/swaggerA4.png)
+![Swagger UI](screenshots/swagger.png)
