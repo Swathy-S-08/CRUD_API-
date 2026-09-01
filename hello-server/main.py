@@ -1,6 +1,7 @@
 
-from fastapi import FastAPI, Response, Header
+from fastapi import FastAPI, Response, Header, Depends
 from fastapi.responses import JSONResponse
+from fastapi.requests import Request
 from pydantic import BaseModel
 from typing import Optional
 import psycopg
@@ -18,7 +19,43 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)   # NEW
 
 load_dotenv()
 
-DATABASE_URL=os.getenv("DATABASE_URL")
+app = FastAPI(
+    title="Task API",
+    description="A simple CRUD API for managing tasks.",
+    version="1.0"
+)
+
+
+class AuthError(Exception):
+    def __init__(self, status_code: int, message: str):
+        self.status_code = status_code
+        self.message = message
+
+
+@app.exception_handler(AuthError)
+def auth_error_handler(request: Request, exc: AuthError):
+    return JSONResponse(status_code=exc.status_code, content={"error": exc.message})
+
+def get_current_user(authorization: Optional[str] = Header(None)):
+    """Reusable auth guard. Verifies the Bearer token and returns the Supabase user, or raises via JSONResponse-equivalent handling."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise AuthError(401, "Access token required")
+
+    token = authorization.removeprefix("Bearer ").strip()
+
+    if not token:
+        raise AuthError(401, "Access token required")
+
+    try:
+        result = supabase.auth.get_user(token)
+    except Exception:
+        raise AuthError(401, "Invalid or expired token")
+
+    if result is None or result.user is None:
+        raise AuthError(401, "Invalid or expired token")
+
+    return result.user
+
 
 def get_connection():
     conn = psycopg.connect(DATABASE_URL, row_factory=psycopg.rows.dict_row)
@@ -54,11 +91,6 @@ def init_db():
 
 #init_db()  commented out for A4 — don't need Postgres running for auth work
 
-app = FastAPI(
-    title="Task API",
-    description="A simple CRUD API for managing tasks.",
-    version="1.0"
-)
 
 
 
@@ -253,6 +285,12 @@ def login(credentials: AuthCredentials):
         }
     )
 
+@app.post("/auth/logout")
+def logout(authorization: str = Header(...), user=Depends(get_current_user)):
+    """Logs the user out via Supabase. Protected — requires a valid token. Returns 204."""
+    supabase.auth.sign_out()
+    return Response(status_code=204)
+
 @app.get("/public/info")
 def public_info():
     """Public endpoint — no auth required."""
@@ -263,38 +301,15 @@ def public_info():
 
 
 @app.get("/protected/profile")
-def get_profile(authorization: Optional[str] = Header(None)):
-    """Protected endpoint — requires a Bearer token in the Authorization header. (Not verified yet — Stage 3.)"""
-    if not authorization or not authorization.startswith("Bearer "):
-        return JSONResponse(
-            status_code=401,
-            content={"error": "Access token required"}
-        )
-
-    token = authorization.removeprefix("Bearer ").strip()
-
-    if not token:
-        return JSONResponse(
-            status_code=401,
-            content={"error": "Access token required"}
-        )
-    try:
-        result = supabase.auth.get_user(token)
-    except Exception:
-        return JSONResponse(
-            status_code=401,
-            content={"error": "Invalid or expired token"}
-        )
-
-    if result is None or result.user is None:
-        return JSONResponse(
-            status_code=401,
-            content={"error": "Invalid or expired token"}
-        )
-
-    user = result.user
+def get_profile(user=Depends(get_current_user)):
+    """Protected endpoint — auth handled entirely by the get_current_user dependency."""
     return {
         "id": user.id,
         "email": user.email,
         "created_at": user.created_at.isoformat() if user.created_at else None
     }
+
+@app.get("/protected/dashboard")
+def get_dashboard(user=Depends(get_current_user)):
+    """Second protected route — proves the guard is reusable."""
+    return {"message": f"Welcome to your dashboard, {user.email}"}
