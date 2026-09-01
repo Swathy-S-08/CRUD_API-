@@ -8,6 +8,9 @@ import psycopg
 import os
 from dotenv import load_dotenv
 from supabase import create_client, Client   # NEW
+from fastapi.security import HTTPBearer
+
+bearer_scheme = HTTPBearer(auto_error=False)
 
 load_dotenv()
 
@@ -36,7 +39,8 @@ class AuthError(Exception):
 def auth_error_handler(request: Request, exc: AuthError):
     return JSONResponse(status_code=exc.status_code, content={"error": exc.message})
 
-def get_current_user(authorization: Optional[str] = Header(None)):
+def get_current_user(authorization: Optional[str] = Header(None),
+    _: str = Depends(bearer_scheme)):
     """Reusable auth guard. Verifies the Bearer token and returns the Supabase user, or raises via JSONResponse-equivalent handling."""
     if not authorization or not authorization.startswith("Bearer "):
         raise AuthError(401, "Access token required")
