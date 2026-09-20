@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urljoin
 from bs4 import BeautifulSoup
+from pydantic import BaseModel, ValidationError, HttpUrl
 
 HEADERS = {
     "User-Agent": "FlyRankInternshipA9/1.0 (+https://github.com/Swathy-S-08/CRUD_API-)"
@@ -14,7 +15,32 @@ DELAY = 0.5
 CACHE_DIR = Path("cache")
 CACHE_DIR.mkdir(exist_ok=True)
 
+OUTPUT_DIR = Path("output")
+OUTPUT_DIR.mkdir(exist_ok=True)
+
 BASE_CATALOGUE_URL = "https://books.toscrape.com/catalogue/page-1.html"
+
+
+
+
+class BookRecord(BaseModel):
+    title: str
+    product_url: HttpUrl
+    price_text: str
+    price_gbp: float
+    availability_text: str
+    rating_text: str | None
+    description: str | None
+    source_page: HttpUrl
+    fetched_at: str
+
+
+def parse_price_gbp(price_text: str) -> float:
+    # "£51.77" -> 51.77 — strip everything that isn't a digit or a dot
+    cleaned = "".join(ch for ch in price_text if ch.isdigit() or ch == ".")
+    return float(cleaned)
+
+
 
 
 def fetch_page(url: str, cache_filename: str) -> str:
@@ -67,7 +93,6 @@ def discover_catalogue_pages_and_books(start_url: str, max_pages: int = 3) -> li
 
 
 def book_url_to_cache_filename(book_url: str) -> str:
-    # e.g. .../catalogue/a-light-in-the-attic_1000/index.html -> book-a-light-in-the-attic_1000.html
     slug = book_url.rstrip("/").split("/")[-2]
     return f"book-{slug}.html"
 
@@ -81,11 +106,9 @@ def extract_book_record(book_url: str, source_page: str) -> dict:
 
     title = product_main.select_one("h1").get_text(strip=True)
     price_text = product_main.select_one("p.price_color").get_text(strip=True)
-
     availability_text = product_main.select_one("p.instock.availability").get_text(strip=True)
 
     rating_tag = product_main.select_one("p.star-rating")
-    # class list looks like ["star-rating", "Three"] — the second class is the word rating
     rating_text = rating_tag["class"][1] if rating_tag else None
 
     description_tag = soup.select_one("#product_description")
@@ -106,13 +129,52 @@ def extract_book_record(book_url: str, source_page: str) -> dict:
     }
 
 
+
+def normalize_and_validate(raw_records: list[dict]) -> tuple[list[dict], list[dict]]:
+    seen_urls = set()
+    valid_records = []
+    invalid_records = []
+
+    for raw in raw_records:
+        # dedupe by canonical URL — if we've already kept this one, skip
+        if raw["product_url"] in seen_urls:
+            continue
+
+        try:
+            raw_with_price = {**raw, "price_gbp": parse_price_gbp(raw["price_text"])}
+            record = BookRecord(**raw_with_price)
+            valid_records.append(record.model_dump(mode="json"))
+            seen_urls.add(raw["product_url"])
+        except (ValidationError, ValueError) as e:
+            invalid_records.append({
+                "product_url": raw.get("product_url"),
+                "reason": str(e),
+            })
+
+    return valid_records, invalid_records
+
+
 if __name__ == "__main__":
     book_urls = discover_catalogue_pages_and_books(BASE_CATALOGUE_URL)
 
-    records = []
+    raw_records = []
     for url in book_urls:
-        record = extract_book_record(url, source_page=BASE_CATALOGUE_URL)
-        records.append(record)
+        raw_records.append(extract_book_record(url, source_page=BASE_CATALOGUE_URL))
 
-    print(f"detail_pages={len(records)}")
-    print(records[0])
+    print(f"detail_pages={len(raw_records)}")
+
+    valid_records, invalid_records = normalize_and_validate(raw_records)
+
+    books_path = OUTPUT_DIR / "books.json"
+    errors_path = OUTPUT_DIR / "errors.json"
+
+    books_path.write_text(
+        __import__("json").dumps(valid_records, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    errors_path.write_text(
+        __import__("json").dumps(invalid_records, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    print(f"valid_records={len(valid_records)} invalid_records={len(invalid_records)}")
